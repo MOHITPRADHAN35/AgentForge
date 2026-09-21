@@ -184,6 +184,11 @@ def get_project_status(project_id: str):
 
 @router.get("/{project_id}/diff")
 def get_project_diff(project_id: str):
+    with Session(engine) as session:
+        project = session.get(Project, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
     project_dir = settings.WORKSPACE_DIR / project_id
     source_dir = project_dir / "source"
     sandbox_dir = project_dir / "sandbox_workspace"
@@ -198,6 +203,9 @@ def get_project_diff(project_id: str):
 @router.get("/{project_id}/tests")
 def get_project_tests(project_id: str):
     with Session(engine) as session:
+        project = session.get(Project, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
         tests = session.exec(select(TestRun).where(TestRun.project_id == project_id).order_by(TestRun.timestamp.asc())).all()
         return tests
 
@@ -205,6 +213,9 @@ def get_project_tests(project_id: str):
 @router.get("/{project_id}/trace")
 def get_project_trace(project_id: str):
     with Session(engine) as session:
+        project = session.get(Project, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
         traces = session.exec(select(TraceEvent).where(TraceEvent.project_id == project_id).order_by(TraceEvent.timestamp.asc())).all()
         return [
             {
@@ -217,3 +228,4 @@ def get_project_trace(project_id: str):
             }
             for t in traces
         ]
+

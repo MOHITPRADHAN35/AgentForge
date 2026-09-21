@@ -100,3 +100,72 @@ def test_create_and_run_demo_project():
     assert trace_resp.status_code == 200
     events = trace_resp.json()
     assert len(events) >= 5
+
+
+def test_security_validator_blocks_attacks(tmp_path):
+    from app.sandbox.security import SecurityValidator
+
+    # Test path traversal attempts
+    with pytest.raises(ValueError, match="forbidden pattern"):
+        SecurityValidator.validate_safe_path(tmp_path, "../outside.py")
+
+    with pytest.raises(ValueError, match="forbidden pattern"):
+        SecurityValidator.validate_safe_path(tmp_path, "/etc/passwd")
+
+    with pytest.raises(ValueError, match="forbidden pattern"):
+        SecurityValidator.validate_safe_path(tmp_path, ".env")
+
+    with pytest.raises(ValueError, match="forbidden pattern"):
+        SecurityValidator.validate_safe_path(tmp_path, "C:\\Windows\\System32")
+
+    # Test valid safe path
+    safe = SecurityValidator.validate_safe_path(tmp_path, "subdir/module.py")
+    assert str(safe).endswith("module.py")
+
+
+def test_agent_tools_schema():
+    from app.nebius.client import AGENT_TOOLS
+
+    tool_names = [t["function"]["name"] for t in AGENT_TOOLS]
+    expected_tools = ["list_files", "read_file", "search_code", "write_file", "run_tests", "apply_patch", "git_diff"]
+
+    for expected in expected_tools:
+        assert expected in tool_names, f"Missing tool: {expected}"
+
+    for tool in AGENT_TOOLS:
+        assert tool["type"] == "function"
+        assert "name" in tool["function"]
+        assert "description" in tool["function"]
+        assert "parameters" in tool["function"]
+
+
+def test_zip_repository_extraction(tmp_path):
+    import io
+    import zipfile
+    from app.repository.loader import RepositoryLoader
+
+    # Build an in-memory zip archive
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("calc/math_ops.py", "def add(a, b):\n    return a + b\n")
+        zf.writestr("calc/tests/test_math.py", "from calc.math_ops import add\ndef test_add():\n    assert add(1, 2) == 3\n")
+    zip_bytes = buf.getvalue()
+
+    target_dir = tmp_path / "extracted_project"
+    source_dir = RepositoryLoader.from_zip(zip_bytes, target_dir)
+
+    assert source_dir.exists()
+    manifest = RepositoryAnalyzer.analyze(source_dir)
+    assert manifest.language == "python"
+    assert manifest.test_framework == "pytest"
+    assert len(manifest.source_files) >= 1
+    assert len(manifest.test_files) >= 1
+
+
+def test_project_not_found_handling():
+    resp_status = client.get("/api/projects/non_existent_id/status")
+    assert resp_status.status_code == 404
+
+    resp_diff = client.get("/api/projects/non_existent_id/diff")
+    assert resp_diff.status_code == 404
+
