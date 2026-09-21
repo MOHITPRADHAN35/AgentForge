@@ -360,6 +360,8 @@ export function AgentForgeDashboard() {
                     let k = "ctx";
                     if (l.startsWith("+") && !l.startsWith("+++")) k = "add";
                     else if (l.startsWith("-") && !l.startsWith("---")) k = "del";
+                    else if (l.startsWith("@@")) k = "hunk";
+                    else if (l.startsWith("---") || l.startsWith("+++")) k = "meta";
                     return { n1: String(idx + 1), n2: String(idx + 1), text: l, k };
                   });
                   setActiveDiffLines(parsed);
@@ -648,7 +650,7 @@ export function AgentForgeDashboard() {
             {codeTab === "Unified Git Diff" ? <>
               <div className="diff-file"><span>@@ unified diff @@</span><b>{selectedFilePath}</b></div>
               {activeDiffLines.map((line, i) => <div key={i} className={cn("code-line", line.k)}><span className="ln">{line.n1}</span><span className="ln">{line.n2}</span><code>{line.text}</code></div>)}
-            </> : codeLines.map((line, i) => <div key={i} className="code-line"><span className="ln">{i + 1}</span><code>{line || " "}</code></div>)}
+            </> : codeLines.map((line, i) => <div key={i} className="code-line single-ln"><span className="ln">{i + 1}</span><code>{line || " "}</code></div>)}
           </div>
           <div className="editor-status"><span><GitPullRequest size={12} /> agent/repair-{projectName}</span><span><CircleDot size={11} /> 0 problems</span><span className="status-right">Ln 1, Col 1 · Spaces: 4</span></div>
         </section>
