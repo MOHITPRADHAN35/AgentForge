@@ -1,0 +1,48 @@
+# Secrets & Credentials (CRITICAL: NEVER COMMIT)
+.env
+backend/.env
+frontend/.env
+*.env
+APIS.MD
+apis.md
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+backend/venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+*.sqlite
+*.db
+agentforge.db
+
+# Node / Frontend
+frontend/node_modules/
+node_modules/
+frontend/.output/
+frontend/.nitro/
+frontend/.tanstack/
+frontend/dist/
+.output/
+.nitro/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Workspaces & Sandboxes (temporary test copies)
+workspaces/
+sandbox_workspace/
+*.zip
+
+# Operating System
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
