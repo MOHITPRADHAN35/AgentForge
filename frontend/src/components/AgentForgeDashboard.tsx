@@ -104,6 +104,7 @@ export function AgentForgeDashboard() {
   const [afterPassed, setAfterPassed] = useState(8);
   const [afterFailed, setAfterFailed] = useState(0);
   const [customFileLines, setCustomFileLines] = useState<string[]>([]);
+  type ResizingSide = "sidebar" | "trace" | "bottom" | null;
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("agentforge_sidebar_width");
@@ -114,7 +115,27 @@ export function AgentForgeDashboard() {
     }
     return 260;
   });
-  const [isResizing, setIsResizing] = useState(false);
+  const [traceWidth, setTraceWidth] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("agentforge_trace_width");
+      if (saved) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val) && val >= 240 && val <= 650) return val;
+      }
+    }
+    return 370;
+  });
+  const [bottomHeight, setBottomHeight] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("agentforge_bottom_height");
+      if (saved) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val) && val >= 100 && val <= 700) return val;
+      }
+    }
+    return 226;
+  });
+  const [resizingSide, setResizingSide] = useState<ResizingSide>(null);
   const timerRef = useRef<number | undefined>(undefined);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -362,23 +383,46 @@ export function AgentForgeDashboard() {
   }, []);
 
   useEffect(() => {
-    if (!isResizing) return;
+    if (!resizingSide) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const minW = 180;
-      const maxW = Math.min(650, window.innerWidth - 450);
-      const newWidth = Math.max(minW, Math.min(maxW, e.clientX));
-      setSidebarWidth(newWidth);
+      if (resizingSide === "sidebar") {
+        const minW = 180;
+        const maxW = Math.min(650, window.innerWidth - traceWidth - 320);
+        const newWidth = Math.max(minW, Math.min(maxW, e.clientX));
+        setSidebarWidth(newWidth);
+      } else if (resizingSide === "trace") {
+        const minW = 240;
+        const maxW = Math.min(650, window.innerWidth - sidebarWidth - 320);
+        const newWidth = Math.max(minW, Math.min(maxW, window.innerWidth - e.clientX));
+        setTraceWidth(newWidth);
+      } else if (resizingSide === "bottom") {
+        const minH = 100;
+        const maxH = Math.min(window.innerHeight - 180, 650);
+        const newHeight = Math.max(minH, Math.min(maxH, window.innerHeight - e.clientY));
+        setBottomHeight(newHeight);
+        setTerminalOpen(true);
+      }
     };
 
     const handleMouseUp = () => {
-      setIsResizing(false);
-      localStorage.setItem("agentforge_sidebar_width", String(sidebarWidth));
+      if (resizingSide === "sidebar") {
+        localStorage.setItem("agentforge_sidebar_width", String(sidebarWidth));
+      } else if (resizingSide === "trace") {
+        localStorage.setItem("agentforge_trace_width", String(traceWidth));
+      } else if (resizingSide === "bottom") {
+        localStorage.setItem("agentforge_bottom_height", String(bottomHeight));
+      }
+      setResizingSide(null);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
 
-    document.body.style.cursor = "col-resize";
+    if (resizingSide === "bottom") {
+      document.body.style.cursor = "row-resize";
+    } else {
+      document.body.style.cursor = "col-resize";
+    }
     document.body.style.userSelect = "none";
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
@@ -389,7 +433,7 @@ export function AgentForgeDashboard() {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isResizing, sidebarWidth]);
+  }, [resizingSide, sidebarWidth, traceWidth, bottomHeight]);
 
   const displayedEvents = backendOnline && liveEvents.length > 0 ? liveEvents : allEvents.slice(0, eventCount);
   const activeStep = runState === "verified" ? 6 : Math.min(5, Math.max(0, displayedEvents.length - 1));
@@ -499,9 +543,14 @@ export function AgentForgeDashboard() {
       </header>
 
       <section
-        className={cn("workspace", isResizing && "resizing")}
+        className={cn(
+          "workspace",
+          resizingSide === "bottom" ? "resizing-row" : resizingSide ? "resizing-col" : ""
+        )}
         style={{
-          gridTemplateColumns: `${sidebarWidth}px 5px minmax(360px, 1fr) 370px`,
+          height: `calc(100vh - 66px - ${terminalOpen ? bottomHeight : 48}px - 6px)`,
+          minHeight: "300px",
+          gridTemplateColumns: `${sidebarWidth}px 5px minmax(280px, 1fr) 5px ${traceWidth}px`,
         }}
       >
         <aside className="repo-panel">
@@ -546,16 +595,16 @@ export function AgentForgeDashboard() {
         </aside>
 
         <div
-          className={cn("sidebar-resizer", isResizing && "active")}
+          className={cn("sidebar-resizer", resizingSide === "sidebar" && "active")}
           onMouseDown={(e) => {
             e.preventDefault();
-            setIsResizing(true);
+            setResizingSide("sidebar");
           }}
           onDoubleClick={() => {
             setSidebarWidth(260);
             localStorage.setItem("agentforge_sidebar_width", "260");
           }}
-          title="Drag to resize sidebar width (double-click to reset)"
+          title="Drag to resize Manifest sidebar (double-click to reset)"
         />
 
         <section className="editor-panel">
@@ -579,6 +628,19 @@ export function AgentForgeDashboard() {
           <div className="editor-status"><span><GitPullRequest size={12} /> agent/repair-{projectName}</span><span><CircleDot size={11} /> 0 problems</span><span className="status-right">Ln 1, Col 1 · Spaces: 4</span></div>
         </section>
 
+        <div
+          className={cn("trace-resizer", resizingSide === "trace" && "active")}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setResizingSide("trace");
+          }}
+          onDoubleClick={() => {
+            setTraceWidth(370);
+            localStorage.setItem("agentforge_trace_width", "370");
+          }}
+          title="Drag to resize Agent Trace panel (double-click to reset)"
+        />
+
         <aside className="trace-panel">
           <div className="trace-heading"><div><span>LIVE EXECUTION</span><strong>Agent Trace</strong></div><div className="stream-live"><i /> STREAMING</div></div>
           <div className="pipeline">
@@ -595,12 +657,34 @@ export function AgentForgeDashboard() {
         </aside>
       </section>
 
-      <section className={cn("bottom-panel", !terminalOpen && "collapsed")}>
+      <div
+        className={cn("bottom-resizer", resizingSide === "bottom" && "active")}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          setResizingSide("bottom");
+        }}
+        onDoubleClick={() => {
+          setBottomHeight(226);
+          localStorage.setItem("agentforge_bottom_height", "226");
+        }}
+        title="Drag up or down to resize Terminal drawer (double-click to reset)"
+      />
+
+      <section
+        className={cn(
+          "bottom-panel",
+          !terminalOpen && "collapsed",
+          resizingSide === "bottom" && "is-resizing"
+        )}
+        style={{
+          height: terminalOpen ? `${bottomHeight}px` : "48px",
+        }}
+      >
         <div className="bottom-handle">
           <button className="bottom-title" onClick={() => setTerminalOpen(!terminalOpen)}><TerminalSquare /><b>TEST RUN COMPARISON</b><span>pytest · isolated container</span>{terminalOpen ? <ChevronDown /> : <ChevronRight />}</button>
           <div className="run-comparison"><div className="run before"><span>BEFORE</span><b>{beforePassed} passed</b><em>{beforeFailed} failed</em><small>EXIT 1</small><X /></div><ChevronRight className="run-arrow" /><div className="run after"><span>AFTER</span><b>{runState === "verified" ? `${afterPassed} passed` : "running"}</b><em>{runState === "verified" ? `${afterFailed} failed` : "—"}</em><small>EXIT {runState === "verified" ? "0" : "—"}</small><Check /></div></div>
         </div>
-        {terminalOpen && <div className="terminal-wrap">
+        {terminalOpen && <div className="terminal-wrap" style={{ height: `${Math.max(60, bottomHeight - 49)}px` }}>
           <div className="terminal-tabs">{(["pytest Console Output", "Container Logs"] as TerminalTab[]).map(tab => <button className={terminalTab === tab ? "active" : ""} onClick={() => setTerminalTab(tab)} key={tab}>{tab}</button>)}<span /><button title="Copy console"><Clipboard /></button></div>
           <pre className="terminal">{terminalTab === "pytest Console Output" ? <><span className="muted">$ docker exec af-sbx-7c91 pytest -q --disable-warnings</span>{"\n"}<span className="info">platform linux -- Python 3.11.9, pytest-8.1.1</span>{"\n"}<span className="success">........                                                                 [100%]</span>{"\n"}<span className="success">8 passed</span><span className="muted"> in 0.25s</span>{"\n"}<span className="success">Process finished with exit code 0</span></> : <><span className="info">[sandbox] container af-sbx-7c91 started</span>{"\n"}<span className="muted">[policy] network namespace isolated</span>{"\n"}<span className="muted">[limits] cpu=1.0 memory=512MB timeout=30s</span>{"\n"}<span className="success">[sandbox] verification complete; container sealed</span></>}</pre>
         </div>}
