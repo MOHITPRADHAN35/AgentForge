@@ -104,6 +104,17 @@ export function AgentForgeDashboard() {
   const [afterPassed, setAfterPassed] = useState(8);
   const [afterFailed, setAfterFailed] = useState(0);
   const [customFileLines, setCustomFileLines] = useState<string[]>([]);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("agentforge_sidebar_width");
+      if (saved) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val) && val >= 180 && val <= 650) return val;
+      }
+    }
+    return 260;
+  });
+  const [isResizing, setIsResizing] = useState(false);
   const timerRef = useRef<number | undefined>(undefined);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -350,6 +361,36 @@ export function AgentForgeDashboard() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const minW = 180;
+      const maxW = Math.min(650, window.innerWidth - 450);
+      const newWidth = Math.max(minW, Math.min(maxW, e.clientX));
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      localStorage.setItem("agentforge_sidebar_width", String(sidebarWidth));
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing, sidebarWidth]);
+
   const displayedEvents = backendOnline && liveEvents.length > 0 ? liveEvents : allEvents.slice(0, eventCount);
   const activeStep = runState === "verified" ? 6 : Math.min(5, Math.max(0, displayedEvents.length - 1));
   const visibleEvents = runState === "idle" ? [] : displayedEvents;
@@ -372,7 +413,12 @@ export function AgentForgeDashboard() {
 
   return (
     <main className="app-shell">
-      <header className="topbar">
+      <header
+        className="topbar"
+        style={{
+          gridTemplateColumns: `${sidebarWidth}px minmax(470px, 1fr) auto`,
+        }}
+      >
         <div className="brand-block"><BrandMark /><div><div className="brand-name">Agent<span>Forge</span><i /></div><div className="project-select">{projectName} <ChevronDown size={12} /></div></div></div>
         <div className="telemetry">
           <div className="telemetry-pill"><Zap size={14} /><div><b>NVIDIA Nemotron 70B</b><span>via Nebius Token Factory</span></div><em><i /> Online</em></div>
@@ -382,9 +428,14 @@ export function AgentForgeDashboard() {
           <div className={cn("connection", !backendOnline && "mock")}><span /><div><b>{backendOnline ? "Backend" : "Mock fallback"}</b><small>127.0.0.1:8000</small></div></div>
           <Button variant="outline" size="sm" onClick={() => void startRun("demo")}><Play /> Load Buggy Demo</Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild><Button size="sm"><CloudUpload /> New Ingestion</Button></DialogTrigger>
-            <DialogContent className="ingest-dialog">
-              <DialogHeader><DialogTitle>Ingest repository</DialogTitle><DialogDescription>Connect any GitHub repository or upload a source archive.</DialogDescription></DialogHeader>
+            <DialogTrigger asChild>
+              <Button size="sm"><Upload /> Ingest Repository</Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[490px] ingest-dialog">
+              <DialogHeader>
+                <DialogTitle>Ingest Repository into AgentForge</DialogTitle>
+                <DialogDescription>Target an open-source GitHub repository or upload a local project archive to observe autonomous test generation and repair.</DialogDescription>
+              </DialogHeader>
               <div className="ingest-options">
                 <label><Github /><span><b>GitHub URL</b><small>Clone any public repository</small></span></label>
                 <Input
@@ -417,12 +468,12 @@ export function AgentForgeDashboard() {
                   </button>
                 </div>
               </div>
-              <div className="divider"><span>OR</span></div>
+              <div className="divider">OR</div>
               <label className="upload-zone">
-                <Upload />
-                <b>{uploadFile ? uploadFile.name : "Drop ZIP archive here"}</b>
-                <span>Maximum file size 100 MB</span>
-                <Input
+                <CloudUpload size={28} />
+                <b>Upload repository .zip archive</b>
+                <span>Drag & drop or browse archive</span>
+                <input
                   type="file"
                   accept=".zip"
                   onChange={(e) => {
@@ -447,7 +498,12 @@ export function AgentForgeDashboard() {
         </div>
       </header>
 
-      <section className="workspace">
+      <section
+        className={cn("workspace", isResizing && "resizing")}
+        style={{
+          gridTemplateColumns: `${sidebarWidth}px 5px minmax(360px, 1fr) 370px`,
+        }}
+      >
         <aside className="repo-panel">
           <div className="panel-heading"><div><span>REPOSITORY</span><strong>Manifest</strong></div><Search size={15} /></div>
           <div className="repo-id"><GitPullRequest size={17} /><div><b>{projectName}</b><span>main · active</span></div><span className="private-badge">INGESTED</span></div>
@@ -469,15 +525,38 @@ export function AgentForgeDashboard() {
                 }}
                 className={cn("file-row", item.indent && "indent", selectedFile === item.name && "selected")}
               >
-                {item.folder ? <><ChevronDown size={13} /><Folder size={14} /></> : <><span className="tree-space" />{item.name.endsWith(".py") ? <FileCode2 size={14} /> : <FileText size={14} />}</>}
-                <span>{item.name}</span>
-                {item.bug && runState !== "verified" && <i className="file-status bug" />}
-                {item.patched && runState === "verified" && <i className="file-status fixed" />}
+                {item.folder ? (
+                  <>
+                    <ChevronDown size={13} />
+                    <Folder size={14} />
+                  </>
+                ) : (
+                  <>
+                    <span className="tree-space" />
+                    {item.name.endsWith(".py") ? <FileCode2 size={14} /> : <FileText size={14} />}
+                  </>
+                )}
+                <span className="file-name">{item.name}</span>
+                {item.bug && runState !== "verified" && <span className="file-status bug" title="Test failure detected" />}
+                {item.patched && runState === "verified" && <span className="file-status is-fixed" title="Patched and verified" />}
               </button>
             ))}
           </div>
           <div className="repo-footer"><ShieldCheck size={15} /><span>Sandbox policy enforced</span><b>SECURE</b></div>
         </aside>
+
+        <div
+          className={cn("sidebar-resizer", isResizing && "active")}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setIsResizing(true);
+          }}
+          onDoubleClick={() => {
+            setSidebarWidth(260);
+            localStorage.setItem("agentforge_sidebar_width", "260");
+          }}
+          title="Drag to resize sidebar width (double-click to reset)"
+        />
 
         <section className="editor-panel">
           <div className={cn("verification", runState === "verified" ? "verified" : "verifying")}>

@@ -61,6 +61,8 @@ async def create_project(
         source_val = "demo-repository"
         demo_path = Path("./demo-repository").resolve()
         if not demo_path.exists():
+            demo_path = (Path(__file__).resolve().parent.parent.parent.parent / "demo-repository").resolve()
+        if not demo_path.exists():
             raise HTTPException(status_code=500, detail="Demo repository template not found on server")
         RepositoryLoader.from_local_dir(demo_path, project_dir)
     else:
