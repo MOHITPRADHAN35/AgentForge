@@ -114,6 +114,8 @@ export function AgentForgeDashboard() {
         const data = (await res.json()) as { content?: string };
         if (data.content !== undefined) {
           setCustomFileLines(data.content.split("\n"));
+          setSelectedFilePath(filePath);
+          setSelectedFile(filePath.split("/").pop() || filePath);
           setCodeTab("Original Code");
         }
       }
@@ -226,11 +228,14 @@ export function AgentForgeDashboard() {
               });
 
             setCurrentTree(newItems);
-            const firstFile = newItems.find((x) => !x.folder);
+            const firstFile = newItems.find((x) => !x.folder && x.name.endsWith(".py")) || newItems.find((x) => !x.folder);
             if (firstFile) {
               setSelectedFile(firstFile.name);
               setSelectedFilePath(firstFile.path || firstFile.name);
               void loadFileContent(projectId, firstFile.path || firstFile.name);
+              if (repoType === "git") {
+                setCodeTab("Original Code");
+              }
             }
           }
         }
