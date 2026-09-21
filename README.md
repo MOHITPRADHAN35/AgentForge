@@ -167,11 +167,15 @@ pytest -v backend/tests/test_backend.py
 
 ### Verified Test Results
 ```text
-backend/tests/test_backend.py::test_health_endpoint PASSED               [ 25%]
-backend/tests/test_backend.py::test_repository_analyzer PASSED           [ 50%]
-backend/tests/test_backend.py::test_filesystem_and_patching_tools PASSED [ 75%]
-backend/tests/test_backend.py::test_create_and_run_demo_project PASSED   [100%]
-======================== 4 passed in 7.43s =========================
+backend/tests/test_backend.py::test_health_endpoint PASSED               [ 12%]
+backend/tests/test_backend.py::test_repository_analyzer PASSED           [ 25%]
+backend/tests/test_backend.py::test_filesystem_and_patching_tools PASSED [ 37%]
+backend/tests/test_backend.py::test_create_and_run_demo_project PASSED   [ 50%]
+backend/tests/test_backend.py::test_security_validator_blocks_attacks PASSED [ 62%]
+backend/tests/test_backend.py::test_agent_tools_schema PASSED            [ 75%]
+backend/tests/test_backend.py::test_zip_repository_extraction PASSED     [ 87%]
+backend/tests/test_backend.py::test_project_not_found_handling PASSED    [100%]
+======================== 8 passed in 8.47s =========================
 ```
 
 ---
