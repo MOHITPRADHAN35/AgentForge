@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity, Box, Check, ChevronDown, ChevronRight, CircleDot, Clipboard,
-  CloudUpload, Code2, Copy, Cpu, Download, FileCode2, FileText, Folder,
+  Activity, ArrowRight, Box, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDot, Clipboard,
+  CloudUpload, Code2, Copy, Cpu, Download, FileCheck, FileCode2, FileText, Folder,
   Github, GitPullRequest, HardDrive, Moon, Play, Radio, RefreshCw, Search,
-  Server, ShieldCheck, Sun, TerminalSquare, TestTube2, Upload, Wifi, X,
+  Server, ShieldCheck, Sparkles, Sun, TerminalSquare, TestTube2, Upload, Wifi, X,
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 type RunState = "idle" | "running" | "verified";
-type CodeTab = "Unified Git Diff" | "Original Code" | "Patched Code" | "Generated Regression Test";
+type CodeTab = "Unified Git Diff" | "What Was Fixed" | "Original Code" | "Patched Code" | "Generated Regression Test";
 type TerminalTab = "pytest Console Output" | "Container Logs";
 type TraceEvent = { type: string; title: string; time: string; detail: string; status: "done" | "active" | "error" };
 
@@ -642,15 +642,268 @@ export function AgentForgeDashboard() {
           </div>
           <div className="change-overview"><div><CircleDot size={14} /><span>Autonomous repair pipeline active for <b>{projectName}</b></span></div><div className="diff-stat"><b>+8</b><em>−3</em><span>verified</span></div></div>
           <div className="editor-tabs">
-            <div className="tab-list">{(["Unified Git Diff", "Original Code", "Patched Code", "Generated Regression Test"] as CodeTab[]).map((tab) => <button key={tab} onClick={() => setCodeTab(tab)} className={codeTab === tab ? "active" : ""}>{tab === "Unified Git Diff" && <GitPullRequest size={13} />}{tab}</button>)}</div>
+            <div className="tab-list">{(["Unified Git Diff", "What Was Fixed", "Original Code", "Patched Code", "Generated Regression Test"] as CodeTab[]).map((tab) => <button key={tab} onClick={() => setCodeTab(tab)} className={cn(codeTab === tab && "active")}>{tab === "Unified Git Diff" && <GitPullRequest size={13} />}{tab === "What Was Fixed" && <Sparkles size={13} />}{tab}{tab === "What Was Fixed" && <span className="tab-pill">2 files</span>}</button>)}</div>
             <div className="editor-tools"><button title="Copy diff" onClick={copyDiff}>{copied ? <Check /> : <Copy />}</button><button title="Download patch" onClick={downloadPatch}><Download /></button></div>
           </div>
-          <div className="file-header"><div><FileCode2 size={14} /><span>{selectedFilePath.includes("/") ? selectedFilePath.split("/")[0] : "root"}</span><b>/</b><strong>{selectedFile}</strong></div><div><span>{repoLang}</span><i />LF<i />UTF-8</div></div>
+          {codeTab !== "What Was Fixed" && <div className="file-header"><div><FileCode2 size={14} /><span>{selectedFilePath.includes("/") ? selectedFilePath.split("/")[0] : "root"}</span><b>/</b><strong>{selectedFile}</strong></div><div><span>{repoLang}</span><i />LF<i />UTF-8</div></div>}
           <div className="code-editor">
-            {codeTab === "Unified Git Diff" ? <>
-              <div className="diff-file"><span>@@ unified diff @@</span><b>{selectedFilePath}</b></div>
-              {activeDiffLines.map((line, i) => <div key={i} className={cn("code-line", line.k)}><span className="ln">{line.n1}</span><span className="ln">{line.n2}</span><code>{line.text}</code></div>)}
-            </> : codeLines.map((line, i) => <div key={i} className="code-line single-ln"><span className="ln">{i + 1}</span><code>{line || " "}</code></div>)}
+            {codeTab === "What Was Fixed" ? (
+              <div className="what-was-fixed-view">
+                <div className="fixed-summary-bar">
+                  <div className="fixed-summary-left">
+                    <div className="fixed-pill-badge">
+                      <Sparkles size={14} />
+                      <b>What Was Fixed</b>
+                    </div>
+                    <div className="fixed-stat-pill">
+                      <span className="count-files">2 files changed</span>
+                      <span className="diff-add">+{activeDiffLines.filter(l => l.k === "add").length || 8}</span>
+                      <span className="diff-del">−{activeDiffLines.filter(l => l.k === "del").length || 3}</span>
+                      <ChevronRight size={13} className="text-muted-foreground" />
+                    </div>
+                  </div>
+                  <div className="fixed-summary-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="review-btn"
+                      onClick={() => setCodeTab("Unified Git Diff")}
+                    >
+                      <GitPullRequest size={13} />
+                      Review Diff
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="fixed-impact-banner">
+                  <div className="impact-item">
+                    <span className="impact-label">TEST HEALTH</span>
+                    <div className="impact-val">
+                      <strong className="text-success">8 / 8 Passed</strong>
+                      <small className="impact-sub">0 failed · 100% verified</small>
+                    </div>
+                  </div>
+                  <div className="impact-divider" />
+                  <div className="impact-item">
+                    <span className="impact-label">FAILURES RESOLVED</span>
+                    <div className="impact-val">
+                      <strong className="text-cyan">3 Root Causes Fixed</strong>
+                      <small className="impact-sub">ZeroDivisionError, AttributeError, MissingEdgeCase</small>
+                    </div>
+                  </div>
+                  <div className="impact-divider" />
+                  <div className="impact-item">
+                    <span className="impact-label">SANDBOX STATUS</span>
+                    <div className="impact-val">
+                      <strong className="text-success"><ShieldCheck size={14} className="inline mr-1" />Clean Verification</strong>
+                      <small className="impact-sub">Isolated container · AF-SBX-04 policy</small>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="fixed-section-title">
+                  <span>ROOT CAUSE & RESOLUTION DETAILS (IN SIMPLE TERMS)</span>
+                </div>
+
+                <div className="fixed-cards-grid">
+                  <div className="fixed-card">
+                    <div className="card-top">
+                      <div className="card-badge bug">BUG 1 · CRASH FIXED</div>
+                      <code className="card-file">src/payments.py</code>
+                    </div>
+                    <h4>Division by Zero when Discount / Quantity is 0</h4>
+                    <div className="card-body">
+                      <div className="card-row">
+                        <span className="label">The Problem:</span>
+                        <p>
+                          When customers checked out with a free promotional item (discount = 0) or quantity 0,
+                          the function calculated <code className="inline-code">total - (total / discount)</code>.
+                          Dividing by 0 crashed the server with an uncaught <span className="text-failure">ZeroDivisionError</span>.
+                        </p>
+                      </div>
+                      <div className="card-row">
+                        <span className="label">What Was Fixed:</span>
+                        <p>
+                          Nemotron synthesized an early boundary guard:
+                          <br />
+                          <code className="inline-code text-success">+ if discount &lt;= 0: return total</code>
+                          <br />
+                          This safely returns the base price without performing division when discount is zero.
+                        </p>
+                      </div>
+                      <div className="card-row">
+                        <span className="label">Test Result:</span>
+                        <p className="test-status">
+                          <CheckCircle2 size={13} className="text-success" />
+                          <span>Passed <b>test_payments.py::test_zero_discount_returns_total</b></span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="fixed-card">
+                    <div className="card-top">
+                      <div className="card-badge bug">BUG 2 · NULL POINTER FIXED</div>
+                      <code className="card-file">src/payments.py</code>
+                    </div>
+                    <h4>Safe Access Guard for Missing Customer Contact</h4>
+                    <div className="card-body">
+                      <div className="card-row">
+                        <span className="label">The Problem:</span>
+                        <p>
+                          The order service tried to read <code className="inline-code">customer.contact.email</code>.
+                          If a customer profile had no contact info entered (None), Python threw
+                          <span className="text-failure">AttributeError: 'NoneType' object has no attribute 'email'</span>, aborting checkout.
+                        </p>
+                      </div>
+                      <div className="card-row">
+                        <span className="label">What Was Fixed:</span>
+                        <p>
+                          Added a null-safety check before accessing properties:
+                          <br />
+                          <code className="inline-code text-success">+ if customer.contact is None: return &quot;contact-unavailable&quot;</code>
+                          <br />
+                          Now handles incomplete profiles gracefully with a safe default.
+                        </p>
+                      </div>
+                      <div className="card-row">
+                        <span className="label">Test Result:</span>
+                        <p className="test-status">
+                          <CheckCircle2 size={13} className="text-success" />
+                          <span>Passed <b>test_customers.py::test_missing_contact_is_safe</b></span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="fixed-card">
+                    <div className="card-top">
+                      <div className="card-badge new-test">SAFETY · REGRESSION TEST</div>
+                      <code className="card-file">tests/test_payments.py</code>
+                    </div>
+                    <h4>Automated Regression Test Suite Added</h4>
+                    <div className="card-body">
+                      <div className="card-row">
+                        <span className="label">The Problem:</span>
+                        <p>
+                          The codebase previously lacked edge-case tests for zero discount or missing contact fields, which allowed these edge cases to break silently in production.
+                        </p>
+                      </div>
+                      <div className="card-row">
+                        <span className="label">What Was Fixed:</span>
+                        <p>
+                          Nemotron synthesized two new unit tests with boundary condition assertions that lock in this fix and prevent future regression.
+                        </p>
+                      </div>
+                      <div className="card-row">
+                        <span className="label">Test Result:</span>
+                        <p className="test-status">
+                          <CheckCircle2 size={13} className="text-success" />
+                          <span>All 8 test assertions verified in sandbox container (0.25s)</span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="fixed-section-title">
+                  <span>FILES CHANGED (2)</span>
+                </div>
+
+                <div className="changed-files-list">
+                  <div className="changed-file-row">
+                    <div className="file-info">
+                      <FileCode2 size={15} className="text-cyan" />
+                      <span className="file-path">src/payments.py</span>
+                      <span className="badge-mod">MODIFIED</span>
+                    </div>
+                    <div className="file-diff-counts">
+                      <span className="diff-add">+5</span>
+                      <span className="diff-del">−2</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="inspect-btn"
+                      onClick={() => {
+                        setSelectedFilePath("src/payments.py");
+                        setSelectedFile("payments.py");
+                        setCodeTab("Unified Git Diff");
+                      }}
+                    >
+                      Inspect Diff <ArrowRight size={12} className="ml-1" />
+                    </Button>
+                  </div>
+
+                  <div className="changed-file-row">
+                    <div className="file-info">
+                      <FileCode2 size={15} className="text-success" />
+                      <span className="file-path">tests/test_payments.py</span>
+                      <span className="badge-add">PATCHED / ADDED</span>
+                    </div>
+                    <div className="file-diff-counts">
+                      <span className="diff-add">+3</span>
+                      <span className="diff-del">−1</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="inspect-btn"
+                      onClick={() => {
+                        setSelectedFilePath("tests/test_payments.py");
+                        setSelectedFile("test_payments.py");
+                        setCodeTab("Unified Git Diff");
+                      }}
+                    >
+                      Inspect Diff <ArrowRight size={12} className="ml-1" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : codeTab === "Unified Git Diff" ? (
+              <>
+                <div className="diff-file-strip">
+                  <div className="diff-strip-left">
+                    <ChevronDown size={14} className="text-muted-foreground" />
+                    <FileCode2 size={14} className="text-cyan" />
+                    <span className="diff-strip-name">{selectedFile}</span>
+                    <span className="diff-strip-path">{selectedFilePath.includes("/") ? selectedFilePath.substring(0, selectedFilePath.lastIndexOf("/")) : "root"}</span>
+                    <span className="diff-strip-badge">M</span>
+                  </div>
+                  <div className="diff-strip-right">
+                    <span className="diff-strip-stat">
+                      <b className="text-success">+{activeDiffLines.filter(l => l.k === "add").length || 8}</b>{" "}
+                      <em className="text-failure">−{activeDiffLines.filter(l => l.k === "del").length || 3}</em>
+                    </span>
+                    <button className="strip-copy" title="Copy diff" onClick={copyDiff}>
+                      {copied ? <Check size={12} /> : <Copy size={12} />}
+                    </button>
+                  </div>
+                </div>
+                {activeDiffLines.map((line, i) => {
+                  const isAdd = line.k === "add";
+                  const isDel = line.k === "del";
+                  return (
+                    <div key={i} className={cn("code-line", line.k)}>
+                      <span className={cn("ln", isAdd && "ln-add", isDel && "ln-del")}>
+                        {line.n1 || " "}
+                      </span>
+                      <span className={cn("ln ln-sign", isAdd && "ln-add", isDel && "ln-del")}>
+                        {isAdd ? `${line.n2 || i + 1}+` : isDel ? `${line.n1 || i + 1}−` : (line.n2 || " ")}
+                      </span>
+                      <code>{line.text}</code>
+                    </div>
+                  );
+                })}
+              </>
+            ) : (
+              codeLines.map((line, i) => (
+                <div key={i} className="code-line single-ln">
+                  <span className="ln">{i + 1}</span>
+                  <code>{line || " "}</code>
+                </div>
+              ))
+            )}
           </div>
           <div className="editor-status"><span><GitPullRequest size={12} /> agent/repair-{projectName}</span><span><CircleDot size={11} /> 0 problems</span><span className="status-right">Ln 1, Col 1 · Spaces: 4</span></div>
         </section>
