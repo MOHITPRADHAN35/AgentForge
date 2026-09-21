@@ -229,3 +229,35 @@ def get_project_trace(project_id: str):
             for t in traces
         ]
 
+
+@router.get("/{project_id}/files")
+def get_project_files(project_id: str):
+    with Session(engine) as session:
+        project = session.get(Project, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+    project_dir = settings.WORKSPACE_DIR / project_id
+    source_dir = project_dir / "source"
+    if not source_dir.exists():
+        return {"files": [], "total": 0}
+
+    return FilesystemTools.list_files(source_dir)
+
+
+@router.get("/{project_id}/file")
+def get_project_file_content(project_id: str, path: str):
+    with Session(engine) as session:
+        project = session.get(Project, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+    project_dir = settings.WORKSPACE_DIR / project_id
+    # check sandbox_workspace first (if patched), otherwise source
+    target_dir = project_dir / "sandbox_workspace"
+    if not (target_dir / path).exists():
+        target_dir = project_dir / "source"
+
+    return FilesystemTools.read_file(target_dir, path)
+
+

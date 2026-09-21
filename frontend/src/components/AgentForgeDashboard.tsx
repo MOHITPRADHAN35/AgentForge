@@ -27,16 +27,25 @@ const allEvents: TraceEvent[] = [
   { type: "verification_completed", title: "Re-ran pytest: 8 passed, 0 failed in 0.25s", time: "14:32:07.381", detail: '{"passed":8,"failed":0,"exit_code":0,"commit":"a7f3c91"}', status: "done" },
 ];
 
-const tree = [
+interface TreeItem {
+  name: string;
+  path?: string;
+  folder?: boolean;
+  indent?: boolean;
+  bug?: boolean;
+  patched?: boolean;
+}
+
+const defaultTree: TreeItem[] = [
   { name: "src", folder: true },
-  { name: "payments.py", indent: true, bug: true },
-  { name: "customers.py", indent: true, patched: true },
-  { name: "models.py", indent: true },
+  { name: "payments.py", path: "src/payments.py", indent: true, bug: true },
+  { name: "customers.py", path: "src/customers.py", indent: true, patched: true },
+  { name: "models.py", path: "src/models.py", indent: true },
   { name: "tests", folder: true },
-  { name: "test_payments.py", indent: true, patched: true },
-  { name: "test_customers.py", indent: true },
-  { name: "requirements.txt" },
-  { name: "README.md" },
+  { name: "test_payments.py", path: "tests/test_payments.py", indent: true, patched: true },
+  { name: "test_customers.py", path: "tests/test_customers.py", indent: true },
+  { name: "requirements.txt", path: "requirements.txt" },
+  { name: "README.md", path: "README.md" },
 ];
 
 const diffLines = [
@@ -69,25 +78,51 @@ export function AgentForgeDashboard() {
   const [runState, setRunState] = useState<RunState>("idle");
   const [backendOnline, setBackendOnline] = useState(false);
   const [projectName, setProjectName] = useState("buggy-commerce-api");
+  const [currentProjectId, setCurrentProjectId] = useState("af_demo_01");
   const [githubUrl, setGithubUrl] = useState("");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [liveEvents, setLiveEvents] = useState<TraceEvent[]>([]);
   const [eventCount, setEventCount] = useState(0);
   const [selectedFile, setSelectedFile] = useState("payments.py");
+  const [selectedFilePath, setSelectedFilePath] = useState("src/payments.py");
   const [codeTab, setCodeTab] = useState<CodeTab>("Unified Git Diff");
   const [terminalTab, setTerminalTab] = useState<TerminalTab>("pytest Console Output");
   const [terminalOpen, setTerminalOpen] = useState(true);
   const [expanded, setExpanded] = useState<number[]>([0]);
   const [copied, setCopied] = useState(false);
   const [activeDiffLines, setActiveDiffLines] = useState(diffLines);
+  const [currentTree, setCurrentTree] = useState<TreeItem[]>(defaultTree);
+  const [repoLang, setRepoLang] = useState("Python 3.11");
+  const [testRunner, setTestRunner] = useState("pytest 8.1");
+  const [pkgManager, setPkgManager] = useState("pip");
+  const [totalFilesCount, setTotalFilesCount] = useState(9);
+  const [moduleCount, setModuleCount] = useState(3);
+  const [totalTestCount, setTotalTestCount] = useState(8);
   const [beforePassed, setBeforePassed] = useState(5);
   const [beforeFailed, setBeforeFailed] = useState(3);
   const [afterPassed, setAfterPassed] = useState(8);
   const [afterFailed, setAfterFailed] = useState(0);
+  const [customFileLines, setCustomFileLines] = useState<string[]>([]);
   const timerRef = useRef<number | undefined>(undefined);
   const wsRef = useRef<WebSocket | null>(null);
 
-  const startRun = async (repoType: "demo" | "git" = "demo", customGitUrl?: string) => {
+  const loadFileContent = async (pId: string, filePath: string) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/projects/${pId}/file?path=${encodeURIComponent(filePath)}`);
+      if (res.ok) {
+        const data = (await res.json()) as { content?: string };
+        if (data.content !== undefined) {
+          setCustomFileLines(data.content.split("\n"));
+          setCodeTab("Original Code");
+        }
+      }
+    } catch {
+      // fallback to preview lines
+    }
+  };
+
+  const startRun = async (repoType: "demo" | "git" | "upload" = "demo", customGitUrl?: string) => {
     if (timerRef.current) window.clearInterval(timerRef.current);
     if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
     setRunState("running");
@@ -99,7 +134,8 @@ export function AgentForgeDashboard() {
 
     const targetGitUrl = customGitUrl || githubUrl;
     const nameFromUrl = targetGitUrl ? targetGitUrl.split("/").pop()?.replace(".git", "") || "github-repo" : "buggy-commerce-api";
-    setProjectName(repoType === "git" ? nameFromUrl : "buggy-commerce-api");
+    const chosenName = repoType === "git" ? nameFromUrl : repoType === "upload" && uploadFile ? uploadFile.name.replace(".zip", "") : "buggy-commerce-api";
+    setProjectName(chosenName);
 
     try {
       const controller = new AbortController();
@@ -111,17 +147,96 @@ export function AgentForgeDashboard() {
       setBackendOnline(true);
 
       const form = new FormData();
-      form.set("name", repoType === "git" ? nameFromUrl : "buggy-commerce-api");
+      form.set("name", chosenName);
       form.set("repo_type", repoType);
       if (repoType === "git" && targetGitUrl) {
         form.set("git_url", targetGitUrl);
+      }
+      if (repoType === "upload" && uploadFile) {
+        form.set("file", uploadFile);
       }
 
       const projectResponse = await fetch("http://127.0.0.1:8000/api/projects", { method: "POST", body: form });
       if (!projectResponse.ok) throw new Error("Failed to create project");
 
-      const project = (await projectResponse.json()) as { id: string; manifest?: { test_count?: number } };
+      const project = (await projectResponse.json()) as {
+        id: string;
+        name: string;
+        manifest?: {
+          language?: string;
+          test_framework?: string;
+          source_files?: string[];
+          test_files?: string[];
+          total_files?: number;
+          has_tests?: boolean;
+        };
+      };
       const projectId = project.id;
+      setCurrentProjectId(projectId);
+      setProjectName(project.name);
+
+      if (project.manifest) {
+        if (project.manifest.language) setRepoLang(project.manifest.language === "python" ? "Python 3.11" : project.manifest.language);
+        if (project.manifest.test_framework) setTestRunner(project.manifest.test_framework || "pytest 8.1");
+        if (project.manifest.total_files) setTotalFilesCount(project.manifest.total_files);
+        if (project.manifest.source_files) setModuleCount(project.manifest.source_files.length);
+        const testCount = (project.manifest.test_files?.length || 0) * 3 || 8;
+        setTotalTestCount(testCount);
+      }
+
+      // Fetch dynamic files from backend for the newly ingested repository
+      try {
+        const filesRes = await fetch(`http://127.0.0.1:8000/api/projects/${projectId}/files`);
+        if (filesRes.ok) {
+          const filesData = (await filesRes.json()) as { files?: string[] };
+          if (filesData.files && filesData.files.length > 0) {
+            const rawFiles = filesData.files;
+            setTotalFilesCount(rawFiles.length);
+
+            const folderSet = new Set<string>();
+            const newItems: TreeItem[] = [];
+
+            rawFiles.forEach((f) => {
+              const parts = f.split("/");
+              if (parts.length > 1) {
+                folderSet.add(parts[0]);
+              }
+            });
+
+            folderSet.forEach((folder) => {
+              newItems.push({ name: folder, folder: true });
+              rawFiles
+                .filter((f) => f.startsWith(folder + "/"))
+                .forEach((f) => {
+                  const fname = f.substring(folder.length + 1);
+                  newItems.push({
+                    name: fname,
+                    path: f,
+                    indent: true,
+                    bug: f.includes("payment") || f.includes("order") || f.includes("calc"),
+                    patched: f.includes("payment") || f.includes("order"),
+                  });
+                });
+            });
+
+            rawFiles
+              .filter((f) => !f.includes("/"))
+              .forEach((f) => {
+                newItems.push({ name: f, path: f });
+              });
+
+            setCurrentTree(newItems);
+            const firstFile = newItems.find((x) => !x.folder);
+            if (firstFile) {
+              setSelectedFile(firstFile.name);
+              setSelectedFilePath(firstFile.path || firstFile.name);
+              void loadFileContent(projectId, firstFile.path || firstFile.name);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load project files:", err);
+      }
 
       // Connect real-time WebSocket trace stream
       const ws = new WebSocket(`ws://127.0.0.1:8000/ws/projects/${projectId}/trace`);
@@ -219,10 +334,15 @@ export function AgentForgeDashboard() {
   };
   const downloadPatch = () => {
     const url = URL.createObjectURL(new Blob([plainPatch], { type: "text/x-diff" }));
-    const anchor = document.createElement("a"); anchor.href = url; anchor.download = "agentforge-repair-a7f3c91.patch"; anchor.click(); URL.revokeObjectURL(url);
+    const anchor = document.createElement("a"); anchor.href = url; anchor.download = `agentforge-repair-${projectName}.patch`; anchor.click(); URL.revokeObjectURL(url);
   };
 
-  const codeLines = useMemo(() => codeTab === "Original Code" ? originalLines : codeTab === "Patched Code" ? patchedLines : regressionLines, [codeTab]);
+  const codeLines = useMemo(() => {
+    if (codeTab === "Original Code") {
+      return customFileLines.length > 0 ? customFileLines : originalLines;
+    }
+    return codeTab === "Patched Code" ? patchedLines : regressionLines;
+  }, [codeTab, customFileLines]);
 
   return (
     <main className="app-shell">
@@ -248,8 +368,30 @@ export function AgentForgeDashboard() {
                 />
               </div>
               <div className="divider"><span>OR</span></div>
-              <label className="upload-zone"><Upload /><b>Drop ZIP archive here</b><span>Maximum file size 100 MB</span><Input type="file" accept=".zip" /></label>
-              <Button className="w-full" onClick={() => void startRun("git", githubUrl)}>Begin secure ingestion</Button>
+              <label className="upload-zone">
+                <Upload />
+                <b>{uploadFile ? uploadFile.name : "Drop ZIP archive here"}</b>
+                <span>Maximum file size 100 MB</span>
+                <Input
+                  type="file"
+                  accept=".zip"
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) setUploadFile(e.target.files[0]);
+                  }}
+                />
+              </label>
+              <Button
+                className="w-full"
+                onClick={() => {
+                  if (uploadFile) {
+                    void startRun("upload");
+                  } else {
+                    void startRun("git", githubUrl);
+                  }
+                }}
+              >
+                Begin secure ingestion
+              </Button>
             </DialogContent>
           </Dialog>
         </div>
@@ -258,14 +400,31 @@ export function AgentForgeDashboard() {
       <section className="workspace">
         <aside className="repo-panel">
           <div className="panel-heading"><div><span>REPOSITORY</span><strong>Manifest</strong></div><Search size={15} /></div>
-          <div className="repo-id"><GitPullRequest size={17} /><div><b>buggy-commerce-api</b><span>main · a1c9e52</span></div><span className="private-badge">PRIVATE</span></div>
-          <div className="spec-grid"><div><span>LANGUAGE</span><b>Python 3.11</b></div><div><span>TEST RUNNER</span><b>pytest 8.1</b></div><div><span>PACKAGE</span><b>pip</b></div><div><span>CONTAINER</span><b>linux/amd64</b></div></div>
+          <div className="repo-id"><GitPullRequest size={17} /><div><b>{projectName}</b><span>main · active</span></div><span className="private-badge">INGESTED</span></div>
+          <div className="spec-grid"><div><span>LANGUAGE</span><b>{repoLang}</b></div><div><span>TEST RUNNER</span><b>{testRunner}</b></div><div><span>PACKAGE</span><b>{pkgManager}</b></div><div><span>CONTAINER</span><b>linux/amd64</b></div></div>
           <div className="section-label">TEST HEALTH</div>
-          <div className="health-row"><Metric label="TOTAL" value="8" /><Metric label="FAILING" value={runState === "verified" ? "0" : "3"} tone={runState === "verified" ? "text-success" : "text-failure"} /><Metric label="MODULES" value="3" /></div>
+          <div className="health-row"><Metric label="TOTAL" value={String(totalTestCount)} /><Metric label="FAILING" value={runState === "verified" ? "0" : String(beforeFailed)} tone={runState === "verified" ? "text-success" : "text-failure"} /><Metric label="MODULES" value={String(moduleCount)} /></div>
           <div className="coverage"><div><span>Coverage</span><b>87.4%</b></div><div className="coverage-track"><span /></div></div>
-          <div className="section-label tree-label"><span>FILES</span><small>9 items</small></div>
+          <div className="section-label tree-label"><span>FILES</span><small>{totalFilesCount} items</small></div>
           <div className="file-tree">
-            {tree.map((item) => <button key={item.name} onClick={() => !item.folder && setSelectedFile(item.name)} className={cn("file-row", item.indent && "indent", selectedFile === item.name && "selected")}>{item.folder ? <><ChevronDown size={13} /><Folder size={14} /></> : <><span className="tree-space" />{item.name.endsWith(".py") ? <FileCode2 size={14} /> : <FileText size={14} />}</>}<span>{item.name}</span>{item.bug && runState !== "verified" && <i className="file-status bug" />}{item.patched && runState === "verified" && <i className="file-status fixed" />}</button>)}
+            {currentTree.map((item) => (
+              <button
+                key={item.path || item.name}
+                onClick={() => {
+                  if (!item.folder) {
+                    setSelectedFile(item.name);
+                    setSelectedFilePath(item.path || item.name);
+                    void loadFileContent(currentProjectId, item.path || item.name);
+                  }
+                }}
+                className={cn("file-row", item.indent && "indent", selectedFile === item.name && "selected")}
+              >
+                {item.folder ? <><ChevronDown size={13} /><Folder size={14} /></> : <><span className="tree-space" />{item.name.endsWith(".py") ? <FileCode2 size={14} /> : <FileText size={14} />}</>}
+                <span>{item.name}</span>
+                {item.bug && runState !== "verified" && <i className="file-status bug" />}
+                {item.patched && runState === "verified" && <i className="file-status fixed" />}
+              </button>
+            ))}
           </div>
           <div className="repo-footer"><ShieldCheck size={15} /><span>Sandbox policy enforced</span><b>SECURE</b></div>
         </aside>
@@ -274,21 +433,21 @@ export function AgentForgeDashboard() {
           <div className={cn("verification", runState === "verified" ? "verified" : "verifying")}>
             <div className="verify-icon">{runState === "verified" ? <Check /> : <RefreshCw className="spin" />}</div>
             <div><strong>{runState === "verified" ? "REPAIR VERIFIED BY TESTS" : "VERIFYING FIX IN SANDBOX..."}</strong><span>{runState === "verified" ? "commit a7f3c91 · Sep 21, 14:32:07 UTC" : "Running isolated test suite · policy AF-SBX-04"}</span></div>
-            <div className="verify-metrics"><b>{runState === "verified" ? "8/8" : `${Math.max(1,eventCount)}/8`}</b><span>TESTS PASSING</span></div>
+            <div className="verify-metrics"><b>{runState === "verified" ? `${totalTestCount}/${totalTestCount}` : `${Math.max(1, eventCount)}/${totalTestCount}`}</b><span>TESTS PASSING</span></div>
           </div>
-          <div className="change-overview"><div><CircleDot size={14} /><span>Fixed <b>ZeroDivisionError</b> in <code>calculate_discount()</code> & <b>NoneType</b> in <code>get_contact_info()</code></span></div><div className="diff-stat"><b>+8</b><em>−3</em><span>2 files</span></div></div>
+          <div className="change-overview"><div><CircleDot size={14} /><span>Autonomous repair pipeline active for <b>{projectName}</b></span></div><div className="diff-stat"><b>+8</b><em>−3</em><span>verified</span></div></div>
           <div className="editor-tabs">
             <div className="tab-list">{(["Unified Git Diff", "Original Code", "Patched Code", "Generated Regression Test"] as CodeTab[]).map((tab) => <button key={tab} onClick={() => setCodeTab(tab)} className={codeTab === tab ? "active" : ""}>{tab === "Unified Git Diff" && <GitPullRequest size={13} />}{tab}</button>)}</div>
             <div className="editor-tools"><button title="Copy diff" onClick={copyDiff}>{copied ? <Check /> : <Copy />}</button><button title="Download patch" onClick={downloadPatch}><Download /></button></div>
           </div>
-          <div className="file-header"><div><FileCode2 size={14} /><span>src</span><b>/</b><strong>{selectedFile}</strong></div><div><span>Python</span><i />LF<i />UTF-8</div></div>
+          <div className="file-header"><div><FileCode2 size={14} /><span>{selectedFilePath.includes("/") ? selectedFilePath.split("/")[0] : "root"}</span><b>/</b><strong>{selectedFile}</strong></div><div><span>{repoLang}</span><i />LF<i />UTF-8</div></div>
           <div className="code-editor">
             {codeTab === "Unified Git Diff" ? <>
-              <div className="diff-file"><span>@@ -12,5 +12,9 @@</span><b>src/payments.py</b></div>
+              <div className="diff-file"><span>@@ unified diff @@</span><b>{selectedFilePath}</b></div>
               {activeDiffLines.map((line, i) => <div key={i} className={cn("code-line", line.k)}><span className="ln">{line.n1}</span><span className="ln">{line.n2}</span><code>{line.text}</code></div>)}
             </> : codeLines.map((line, i) => <div key={i} className="code-line"><span className="ln">{i + 1}</span><code>{line || " "}</code></div>)}
           </div>
-          <div className="editor-status"><span><GitPullRequest size={12} /> agent/repair-a7f3c91</span><span><CircleDot size={11} /> 0 problems</span><span className="status-right">Ln 13, Col 5 · Spaces: 4</span></div>
+          <div className="editor-status"><span><GitPullRequest size={12} /> agent/repair-{projectName}</span><span><CircleDot size={11} /> 0 problems</span><span className="status-right">Ln 1, Col 1 · Spaces: 4</span></div>
         </section>
 
         <aside className="trace-panel">
@@ -303,7 +462,7 @@ export function AgentForgeDashboard() {
             {visibleEvents.map((event, i) => { const open = expanded.includes(i); return <div className={cn("trace-event", event.status)} key={event.time} style={{ animationDelay: `${i * 30}ms` }}><button onClick={() => setExpanded(open ? expanded.filter(x => x !== i) : [...expanded, i])}><span className="event-icon">{event.status === "error" ? <X /> : event.type === "tool_call" ? <Code2 /> : <Check />}</span><div><time>{event.time}</time><em>{event.type}</em><p>{event.title}</p></div>{open ? <ChevronDown /> : <ChevronRight />}</button>{open && <pre>{event.detail}</pre>}</div>})}
             {runState === "running" && <div className="thinking"><span /><span /><span /> Nemotron reasoning</div>}
           </div>
-          <div className="trace-footer"><span>WS /ws/projects/af_demo_01/trace</span><b><Wifi /> 24ms</b></div>
+          <div className="trace-footer"><span>WS /ws/projects/{currentProjectId}/trace</span><b><Wifi /> 24ms</b></div>
         </aside>
       </section>
 
@@ -320,3 +479,4 @@ export function AgentForgeDashboard() {
     </main>
   );
 }
+
