@@ -14,6 +14,7 @@ from app.repository.loader import RepositoryLoader
 from app.repository.analyzer import RepositoryAnalyzer
 from app.agent.orchestrator import AgentOrchestrator
 from app.agent.tools.patching import PatchingTools
+from app.agent.tools.filesystem import FilesystemTools
 from app.api.ws import ws_manager
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])

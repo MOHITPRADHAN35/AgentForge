@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     SANDBOX_IMAGE: str = "agentforge-sandbox:latest"
 
     # Database Settings
-    DATABASE_URL: str = "sqlite:///./agentforge.db"
+    DATABASE_URL: str = f"sqlite:///{(Path(__file__).resolve().parent.parent.parent / 'agentforge.db').as_posix()}"
 
     # Server Settings
     PORT: int = 8000
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     # Workspaces
-    WORKSPACE_DIR: Path = Path("./workspaces").resolve()
+    WORKSPACE_DIR: Path = Path(__file__).resolve().parent.parent.parent / "workspaces"
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).resolve().parent.parent / ".env"),
