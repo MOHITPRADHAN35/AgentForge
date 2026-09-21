@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, Box, Check, ChevronDown, ChevronRight, CircleDot, Clipboard,
   CloudUpload, Code2, Copy, Cpu, Download, FileCode2, FileText, Folder,
-  Github, GitPullRequest, HardDrive, Play, Radio, RefreshCw, Search,
-  Server, ShieldCheck, TerminalSquare, TestTube2, Upload, Wifi, X,
+  Github, GitPullRequest, HardDrive, Moon, Play, Radio, RefreshCw, Search,
+  Server, ShieldCheck, Sun, TerminalSquare, TestTube2, Upload, Wifi, X,
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -136,6 +136,29 @@ export function AgentForgeDashboard() {
     return 226;
   });
   const [resizingSide, setResizingSide] = useState<ResizingSide>(null);
+  type ThemeMode = "dark" | "light";
+  type AccentPreset = "emerald" | "purple" | "cyan" | "amber";
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("agentforge_theme_mode") as ThemeMode | null;
+      if (saved === "light" || saved === "dark") return saved;
+    }
+    return "dark";
+  });
+  const [accentPreset, setAccentPreset] = useState<AccentPreset>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("agentforge_color_preset") as AccentPreset | null;
+      if (saved === "emerald" || saved === "purple" || saved === "cyan" || saved === "amber") return saved;
+    }
+    return "emerald";
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", themeMode);
+    document.documentElement.setAttribute("data-accent", accentPreset);
+    localStorage.setItem("agentforge_theme_mode", themeMode);
+    localStorage.setItem("agentforge_color_preset", accentPreset);
+  }, [themeMode, accentPreset]);
   const timerRef = useRef<number | undefined>(undefined);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -469,6 +492,32 @@ export function AgentForgeDashboard() {
           <div className="telemetry-pill"><Box size={14} /><div><b>Isolated Docker</b><span>512MB · 1.0 CPU · Network isolated</span></div></div>
         </div>
         <div className="top-actions">
+          <div className="theme-selector">
+            <button
+              type="button"
+              className="theme-btn"
+              onClick={() => setThemeMode((m) => (m === "dark" ? "light" : "dark"))}
+              title={`Switch to ${themeMode === "dark" ? "Light" : "Dark"} mode`}
+            >
+              {themeMode === "dark" ? <Sun size={13} /> : <Moon size={13} />}
+            </button>
+            <div className="theme-divider" />
+            {(["emerald", "purple", "cyan", "amber"] as AccentPreset[]).map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                className={cn("accent-dot", accentPreset === preset && "active")}
+                style={{
+                  background:
+                    preset === "emerald" ? "#10b981" :
+                    preset === "purple" ? "#a855f7" :
+                    preset === "cyan" ? "#06b6d4" : "#f59e0b"
+                }}
+                onClick={() => setAccentPreset(preset)}
+                title={`Preset: ${preset.charAt(0).toUpperCase() + preset.slice(1)}`}
+              />
+            ))}
+          </div>
           <div className={cn("connection", !backendOnline && "mock")}><span /><div><b>{backendOnline ? "Backend" : "Mock fallback"}</b><small>127.0.0.1:8000</small></div></div>
           <Button variant="outline" size="sm" onClick={() => void startRun("demo")}><Play /> Load Buggy Demo</Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
