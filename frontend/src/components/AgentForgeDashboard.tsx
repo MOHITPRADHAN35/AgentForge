@@ -487,30 +487,6 @@ export function AgentForgeDashboard() {
                   value={githubUrl}
                   onChange={(e) => setGithubUrl(e.target.value)}
                 />
-                <div style={{ display: "flex", gap: "6px", marginTop: "8px", alignItems: "center" }}>
-                  <small style={{ color: "var(--muted-foreground, #888)", fontSize: "11px" }}>Presets:</small>
-                  <button
-                    type="button"
-                    onClick={() => setGithubUrl("https://github.com/tartley/colorama.git")}
-                    style={{ fontSize: "11px", padding: "3px 8px", background: "rgba(255,255,255,0.08)", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.15)", cursor: "pointer", color: "#38bdf8" }}
-                  >
-                    ⚡ colorama
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setGithubUrl("https://github.com/bottlepy/bottle.git")}
-                    style={{ fontSize: "11px", padding: "3px 8px", background: "rgba(255,255,255,0.08)", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.15)", cursor: "pointer", color: "#38bdf8" }}
-                  >
-                    ⚡ bottle
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setGithubUrl("https://github.com/pallets/click.git")}
-                    style={{ fontSize: "11px", padding: "3px 8px", background: "rgba(255,255,255,0.08)", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.15)", cursor: "pointer", color: "#38bdf8" }}
-                  >
-                    ⚡ click
-                  </button>
-                </div>
               </div>
               <div className="divider">OR</div>
               <label className="upload-zone">
