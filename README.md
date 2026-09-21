@@ -113,7 +113,7 @@ AgentForge avoids generic "AI chatbot" interfaces. It delivers an IDE-grade deve
 
 ### 1. Clone & Configure
 ```bash
-git clone https://github.com/YOUR_USERNAME/AgentForge.git
+git clone https://github.com/MOHITPRADHAN35/AgentForge.git
 cd AgentForge
 cp .env.example backend/.env
 ```

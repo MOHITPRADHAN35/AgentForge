@@ -10,7 +10,7 @@
 * **Tagline**: Find. Fix. Verify. Automatically. Powered by NVIDIA Nemotron on Nebius Token Factory.
 * **Track**: **Coding and Agentic Engineering Track**
 * **Repository License**: MIT License
-* **Repository URL**: `https://github.com/YOUR_USERNAME/AgentForge`
+* **Repository URL**: `https://github.com/MOHITPRADHAN35/AgentForge`
 
 ---
 
