@@ -134,14 +134,26 @@ export function AgentForgeDashboard() {
     setTerminalOpen(true);
     setDialogOpen(false);
 
-    const targetGitUrl = customGitUrl || githubUrl;
-    const nameFromUrl = targetGitUrl ? targetGitUrl.split("/").pop()?.replace(".git", "") || "github-repo" : "buggy-commerce-api";
+    const targetGitUrl = (customGitUrl || githubUrl).trim();
+    let effectiveGitUrl = targetGitUrl;
+    if (effectiveGitUrl && !effectiveGitUrl.startsWith("http://") && !effectiveGitUrl.startsWith("https://") && !effectiveGitUrl.startsWith("git@")) {
+      if (effectiveGitUrl.toLowerCase() === "colorama") {
+        effectiveGitUrl = "https://github.com/tartley/colorama.git";
+      } else if (effectiveGitUrl.toLowerCase() === "bottle") {
+        effectiveGitUrl = "https://github.com/bottlepy/bottle.git";
+      } else if (effectiveGitUrl.toLowerCase() === "click") {
+        effectiveGitUrl = "https://github.com/pallets/click.git";
+      } else if (effectiveGitUrl.includes("/")) {
+        effectiveGitUrl = `https://github.com/${effectiveGitUrl}.git`;
+      }
+    }
+    const nameFromUrl = effectiveGitUrl ? effectiveGitUrl.split("/").pop()?.replace(".git", "") || "github-repo" : "buggy-commerce-api";
     const chosenName = repoType === "git" ? nameFromUrl : repoType === "upload" && uploadFile ? uploadFile.name.replace(".zip", "") : "buggy-commerce-api";
     setProjectName(chosenName);
 
     try {
       const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), 1200);
+      const timeout = window.setTimeout(() => controller.abort(), 6000);
       const health = await fetch("http://127.0.0.1:8000/api/health", { signal: controller.signal });
       window.clearTimeout(timeout);
 
@@ -150,16 +162,19 @@ export function AgentForgeDashboard() {
 
       const form = new FormData();
       form.set("name", chosenName);
-      form.set("repo_type", repoType);
-      if (repoType === "git" && targetGitUrl) {
-        form.set("git_url", targetGitUrl);
+      form.set("repo_type", repoType === "upload" ? "zip" : repoType);
+      if (repoType === "git" && effectiveGitUrl) {
+        form.set("git_url", effectiveGitUrl);
       }
       if (repoType === "upload" && uploadFile) {
         form.set("file", uploadFile);
       }
 
       const projectResponse = await fetch("http://127.0.0.1:8000/api/projects", { method: "POST", body: form });
-      if (!projectResponse.ok) throw new Error("Failed to create project");
+      if (!projectResponse.ok) {
+        const errDetail = await projectResponse.json().catch(() => ({ detail: "Failed to create project" }));
+        throw new Error(errDetail.detail || "Failed to create project");
+      }
 
       const project = (await projectResponse.json()) as {
         id: string;
@@ -306,18 +321,24 @@ export function AgentForgeDashboard() {
 
       // Trigger the autonomous agent run in background
       await fetch(`http://127.0.0.1:8000/api/projects/${projectId}/agent/run`, { method: "POST" });
-    } catch {
-      // Graceful fallback to mock demo simulation if backend is not reachable
-      setBackendOnline(false);
-      let count = 0;
-      timerRef.current = window.setInterval(() => {
-        count += 1;
-        setEventCount(count);
-        if (count >= allEvents.length) {
-          if (timerRef.current) window.clearInterval(timerRef.current);
-          setRunState("verified");
-        }
-      }, 430);
+    } catch (err: any) {
+      console.error("AgentForge Backend error:", err);
+      if (repoType === "demo") {
+        setBackendOnline(false);
+        let count = 0;
+        timerRef.current = window.setInterval(() => {
+          count += 1;
+          setEventCount(count);
+          if (count >= allEvents.length) {
+            if (timerRef.current) window.clearInterval(timerRef.current);
+            setRunState("verified");
+          }
+        }, 430);
+      } else {
+        setRunState("idle");
+        const msg = err?.message || "Failed to clone repository. Please verify the git URL.";
+        alert(`Ingestion Error: ${msg}`);
+      }
     }
   };
 
@@ -371,6 +392,30 @@ export function AgentForgeDashboard() {
                   value={githubUrl}
                   onChange={(e) => setGithubUrl(e.target.value)}
                 />
+                <div style={{ display: "flex", gap: "6px", marginTop: "8px", alignItems: "center" }}>
+                  <small style={{ color: "var(--muted-foreground, #888)", fontSize: "11px" }}>Presets:</small>
+                  <button
+                    type="button"
+                    onClick={() => setGithubUrl("https://github.com/tartley/colorama.git")}
+                    style={{ fontSize: "11px", padding: "3px 8px", background: "rgba(255,255,255,0.08)", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.15)", cursor: "pointer", color: "#38bdf8" }}
+                  >
+                    ⚡ colorama
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGithubUrl("https://github.com/bottlepy/bottle.git")}
+                    style={{ fontSize: "11px", padding: "3px 8px", background: "rgba(255,255,255,0.08)", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.15)", cursor: "pointer", color: "#38bdf8" }}
+                  >
+                    ⚡ bottle
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGithubUrl("https://github.com/pallets/click.git")}
+                    style={{ fontSize: "11px", padding: "3px 8px", background: "rgba(255,255,255,0.08)", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.15)", cursor: "pointer", color: "#38bdf8" }}
+                  >
+                    ⚡ click
+                  </button>
+                </div>
               </div>
               <div className="divider"><span>OR</span></div>
               <label className="upload-zone">

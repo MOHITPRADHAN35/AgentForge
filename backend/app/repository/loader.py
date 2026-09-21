@@ -35,8 +35,29 @@ class RepositoryLoader:
         return extract_path
 
     @staticmethod
-    def from_git(git_url: str, target_dir: Path) -> Path:
+    def normalize_git_url(url: str) -> str:
+        url = url.strip()
+        if not url:
+            return url
+        if url.startswith("http://") or url.startswith("https://") or url.startswith("git@"):
+            return url
+        KNOWN_REPOS = {
+            "colorama": "https://github.com/tartley/colorama.git",
+            "click": "https://github.com/pallets/click.git",
+            "bottle": "https://github.com/bottlepy/bottle.git",
+            "requests": "https://github.com/psf/requests.git",
+            "flask": "https://github.com/pallets/flask.git",
+        }
+        if url.lower() in KNOWN_REPOS:
+            return KNOWN_REPOS[url.lower()]
+        if "/" in url:
+            return f"https://github.com/{url}.git"
+        return f"https://github.com/{url}/{url}.git"
+
+    @classmethod
+    def from_git(cls, git_url: str, target_dir: Path) -> Path:
         """Clone a git repository into target_dir/source."""
+        git_url = cls.normalize_git_url(git_url)
         extract_path = target_dir / "source"
         if extract_path.exists():
             shutil.rmtree(extract_path)
